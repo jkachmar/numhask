@@ -12,18 +12,100 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
+import qualified Protolude as P
 import NumHask.Array
 import NumHask.Prelude
 import Options.Generic
 import Perf
 import Perf.Analysis
-import qualified Data.Matrix as Matrix
 import qualified Numeric.LinearAlgebra as H
 import qualified Data.Vector as V
 import qualified Statistics.Matrix as DLA
+import System.Random.MWC
 
 instance NFData DLA.Matrix where
-  rnf m@(DLA.Matrix r c v) = seq m ()
+  rnf m = seq m ()
+
+oneRunList10 g f = do
+  ra <- sequence $ replicate 100 (uniform g :: IO Double)
+  rb <- sequence $ replicate 100 (uniform g :: IO Double)
+  let !aa = fromList ra :: Array [] '[10, 10] Double
+  let ab = fromList rb :: Array [] '[10, 10] Double
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunVector10 g f = do
+  ra <- sequence $ replicate 100 (uniform g :: IO Double)
+  rb <- sequence $ replicate 100 (uniform g :: IO Double)
+  let !aa = fromList ra :: Array V.Vector '[10, 10] Double
+  let ab = fromList rb :: Array V.Vector '[10, 10] Double
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunList100 g f = do
+  ra <- sequence $ replicate 10000 (uniform g :: IO Double)
+  rb <- sequence $ replicate 10000 (uniform g :: IO Double)
+  let !aa = fromList ra :: Array [] '[100, 100] Double
+  let ab = fromList rb :: Array [] '[100, 100] Double
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunVector100 g f = do
+  ra <- sequence $ replicate 10000 (uniform g :: IO Double)
+  rb <- sequence $ replicate 10000 (uniform g :: IO Double)
+  let !aa = fromList ra :: Array V.Vector '[100, 100] Double
+  let ab = fromList rb :: Array V.Vector '[100, 100] Double
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunHMatrix g f sz = do
+  ra <- sequence $ replicate (sz*sz) (uniform g :: IO Double)
+  rb <- sequence $ replicate (sz*sz) (uniform g :: IO Double)
+  let !aa = H.matrix sz ra
+  let !ab = H.matrix sz rb
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunDLA g f sz = do
+  ra <- sequence $ replicate (sz*sz) (uniform g :: IO Double)
+  rb <- sequence $ replicate (sz*sz) (uniform g :: IO Double)
+  let !aa = DLA.fromList sz sz ra
+  let !ab = DLA.fromList sz sz rb
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunListV10 g f = do
+  ra <- sequence $ replicate 10 (uniform g :: IO Double)
+  rb <- sequence $ replicate 10 (uniform g :: IO Double)
+  let !aa = fromList ra :: Array [] '[10] Double
+  let !ab = fromList rb :: Array [] '[10] Double
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunVectorV10 g f = do
+  ra <- sequence $ replicate 10 (uniform g :: IO Double)
+  rb <- sequence $ replicate 10 (uniform g :: IO Double)
+  let !aa = fromList ra :: Array V.Vector '[10] Double
+  let !ab = fromList rb :: Array V.Vector '[10] Double
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunHMatrixV g f sz = do
+  ra <- sequence $ replicate sz (uniform g :: IO Double)
+  rb <- sequence $ replicate sz (uniform g :: IO Double)
+  let !aa = H.vector ra
+  let !ab = H.vector rb
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
+oneRunDLAV g f sz = do
+  ra <- sequence $ replicate sz (uniform g :: IO Double)
+  rb <- sequence $ replicate sz (uniform g :: IO Double)
+  let !aa = DLA.fromList 1 sz ra
+  let !ab = DLA.fromList sz 1 rb
+  (res, r) <- tickNoinline (f aa) ab
+  pure (res, r)
+
 
 data Opts = Opts
   { runs :: Maybe Int -- <?> "number of runs"
@@ -37,153 +119,84 @@ main = do
   o :: Opts <- getRecord "benchmarking numhask array"
   let !n = fromMaybe 100 (runs o)
   _ <- warmup 100
+  g <- create
 
   -- sz = 10 run
-  let sz = 10
+  let sz = 10 :: Int
 
-  let aa = [1 ..] :: Array [] '[10, 10] Double
-  let ab = [0 ..] :: Array [] '[10, 10] Double
+  -- there is no way to avoid the hardcode :(
+  let !aa = [1 ..] :: Array [] '[10, 10] Double
+  let !ab = [0 ..] :: Array [] '[10, 10] Double
 
-  let ha = (sz H.>< sz) [1 :: H.Z ..]
-  let hb = (sz H.>< sz) [1 :: H.Z ..]
+  let !va = [1 ..] :: Array V.Vector '[10, 10] Double
+  let !vb = [0 ..] :: Array V.Vector '[10, 10] Double
 
-  let ma = Matrix.matrix sz sz (\(i, j) -> i + sz * j)
-  let mb = Matrix.matrix sz sz (\(i, j) -> i + sz * j)
+  let !ha = (sz H.>< sz) [1 :: H.Z ..]
+  let !hb = (sz H.>< sz) [1 :: H.Z ..]
 
-  let va = [1 ..] :: Array V.Vector '[10, 10] Double
-  let vb = [0 ..] :: Array V.Vector '[10, 10] Double
+  let !dlaa = DLA.fromList sz sz [1 .. (fromIntegral $ sz*sz)]
+  let !dlab = DLA.fromList sz sz [0 .. (fromIntegral $ sz*sz - 1)]
 
-  let dlaa = DLA.fromList sz sz $ [1 .. (fromIntegral $ sz*sz)]
-  let dlab = DLA.fromList sz sz $ [0 .. (fromIntegral $ sz*sz - 1)]
-
-  (tcreatea, aa') <- tickIO $ pure aa
-  (tcreateha, ha') <- tickIO $ pure ha
-  (tcreatema, ma') <- tickIO $ pure ma
-  (tcreateva, va') <- tickIO $ pure va
-  (tcreatedlaa, dlaa') <- tickIO $ pure dlaa
-  (rmmult, _) <- ticks n (NumHask.Array.mmult aa') ab
-  (rmmulth, _) <- ticks n (ha' H.<>) hb
-  (rmmultm, _) <- ticks n (ma' `Matrix.multStd2`) mb
-  (rmmultv, _) <- ticks n (NumHask.Array.mmult va') vb
-  (rmmultdla, _) <- ticks n (DLA.multiply dlaa') dlab
+  (rmmult, _) <- ticks n (NumHask.Array.mmult aa) ab
+  (rmmulth, _) <- ticks n (ha H.<>) hb
+  (rmmultv, _) <- ticks n (NumHask.Array.mmult va) vb
+  (rmmultdla, _) <- ticks n (DLA.multiply dlaa) dlab
 
   writeFile "other/array.md" $ code
     [ "square matrix size: " <> show sz
     , ""
-    , "creation"
-    , formatInt "hmatrix:" 2 tcreateha
-    , formatInt "matrix:" 2 tcreatema
-    , formatInt "numhask []:" 2 tcreatea
-    , formatInt "numhask Boxed:" 2 tcreateva
-    , formatInt "DLA:" 2 tcreatedlaa
-    , ""
     , "mmult"
     , formatRunHeader
     , ""
-    , formatRun "hmatrix" 2 rmmulth
-    , formatRun "matrix" 2 rmmultm
     , formatRun "numhask []" 2 rmmult
     , formatRun "numhask Boxed" 2 rmmultv
+    , formatRun "hmatrix" 2 rmmulth
     , formatRun "DLA" 2 rmmultdla
     ]
 
-  -- sz = 20 run
-  let sz = 20
-
-  let aa = [1 ..] :: Array [] '[20, 20] Double
-  let ab = [0 ..] :: Array [] '[20, 20] Double
-
-  let ha = (sz H.>< sz) [1 :: H.Z ..]
-  let hb = (sz H.>< sz) [1 :: H.Z ..]
-
-  let ma = Matrix.matrix sz sz (\(i, j) -> i + sz * j)
-  let mb = Matrix.matrix sz sz (\(i, j) -> i + sz * j)
-
-  let va = [1 ..] :: Array V.Vector '[20, 20] Double
-  let vb = [0 ..] :: Array V.Vector '[20, 20] Double
-
-  let dlaa = DLA.fromList sz sz $ [1 .. (fromIntegral $ sz*sz)]
-  let dlab = DLA.fromList sz sz $ [0 .. (fromIntegral $ sz*sz - 1)]
-
-  (tcreatea, aa') <- tickIO $ pure aa
-  (tcreateha, ha') <- tickIO $ pure ha
-  (tcreatema, ma') <- tickIO $ pure ma
-  (tcreateva, va') <- tickIO $ pure va
-  (tcreatedlaa, dlaa') <- tickIO $ pure dlaa
-  (rmmult, _) <- ticks n (NumHask.Array.mmult aa') ab
-  (rmmulth, _) <- ticks n (ha' H.<>) hb
-  (rmmultm, _) <- ticks n (ma' `Matrix.multStd2`) mb
-  (rmmultv, _) <- ticks n (NumHask.Array.mmult va') vb
-  (rmmultdla, _) <- ticks n (DLA.multiply dlaa') dlab
+  xList <- sequence $ replicate n (oneRunList10 g mmult)
+  print $ sum $ sum $ fmap snd xList
+  xVec <- sequence $ replicate n (oneRunVector10 g mmult)
+  print $ sum $ sum $ fmap snd xVec
+  xH <- sequence $ replicate n (oneRunHMatrix g (H.<>) sz)
+  print $ P.sum $ fmap P.sum $ fmap (fmap P.sum) $ fmap H.toLists $ fmap snd xH
+  xDLA <- sequence $ replicate n (oneRunDLA g DLA.multiply sz)
+  print $ sum $ fmap sum $ fmap (fmap sum) $ fmap DLA.toRowLists $ fmap snd xDLA
 
   appendFile "other/array.md" $ code
-    [ "square matrix size: " <> show sz
+    [ "random version square matrix size: " <> show sz
     , ""
-    , "creation"
-    , formatInt "hmatrix:" 2 tcreateha
-    , formatInt "matrix:" 2 tcreatema
-    , formatInt "numhask []:" 2 tcreatea
-    , formatInt "numhask Boxed:" 2 tcreateva
-    , formatInt "DLA:" 2 tcreatedlaa
-    , ""
-    , "mmult"
+    , "mmult, randoms"
     , formatRunHeader
     , ""
-    , formatRun "hmatrix" 2 rmmulth
-    , formatRun "matrix" 2 rmmultm
-    , formatRun "numhask []" 2 rmmult
-    , formatRun "numhask Boxed" 2 rmmultv
-    , formatRun "DLA" 2 rmmultdla
+    , formatRun "numhask []" 2 (fmap fst xList)
+    , formatRun "numhask Vector" 2 (fmap fst xVec)
+    , formatRun "HMatrix" 2 (fmap fst xH)
+    , formatRun "DLA" 2 (fmap fst xDLA)
     ]
 
-  -- sz = 100 run
-  let sz = 100
-
-  let aa = [1 ..] :: Array [] '[100, 100] Double
-  let ab = [0 ..] :: Array [] '[100, 100] Double
-
-  let ha = (sz H.>< sz) [1 :: H.Z ..]
-  let hb = (sz H.>< sz) [1 :: H.Z ..]
-
-  let ma = Matrix.matrix sz sz (\(i, j) -> i + sz * j)
-  let mb = Matrix.matrix sz sz (\(i, j) -> i + sz * j)
-
-  let va = [1 ..] :: Array V.Vector '[100, 100] Double
-  let vb = [0 ..] :: Array V.Vector '[100, 100] Double
-
-  let dlaa = DLA.fromList sz sz $ [1 .. (fromIntegral $ sz*sz)]
-  let dlab = DLA.fromList sz sz $ [0 .. (fromIntegral $ sz*sz - 1)]
-
-  (tcreatea, aa') <- tickIO $ pure aa
-  (tcreateha, ha') <- tickIO $ pure ha
-  (tcreatema, ma') <- tickIO $ pure ma
-  (tcreateva, va') <- tickIO $ pure va
-  (tcreatedlaa, dlaa') <- tickIO $ pure dlaa
-  (rmmult, _) <- ticks n (NumHask.Array.mmult aa') ab
-  (rmmulth, _) <- ticks n (ha' H.<>) hb
-  (rmmultm, _) <- ticks n (ma' `Matrix.multStd2`) mb
-  (rmmultv, _) <- ticks n (NumHask.Array.mmult va') vb
-  (rmmultdla, _) <- ticks n (DLA.multiply dlaa') dlab
+  xList <- sequence $ replicate n (oneRunListV10 g (<.>))
+  print $ sum $ fmap snd xList
+  xVec <- sequence $ replicate n (oneRunVectorV10 g (<.>))
+  print $ sum $ fmap snd xVec
+  xH <- sequence $ replicate n (oneRunHMatrixV g (H.<.>) sz)
+  print $ P.sum $ fmap snd xH
+  xDLA <- sequence $ replicate n (oneRunDLAV g DLA.multiply sz)
+  print $ sum $ fmap sum $ fmap (fmap sum) $ fmap DLA.toRowLists $ fmap snd xDLA
 
   appendFile "other/array.md" $ code
-    [ "square matrix size: " <> show sz
+    [ "vector inner product size: " <> show sz
     , ""
-    , "creation"
-    , formatInt "hmatrix:" 2 tcreateha
-    , formatInt "matrix:" 2 tcreatema
-    , formatInt "numhask []:" 2 tcreatea
-    , formatInt "numhask Boxed:" 2 tcreateva
-    , formatInt "DLA:" 2 tcreatedlaa
-    , ""
-    , "mmult"
+    , "<.>, randoms"
     , formatRunHeader
     , ""
-    , formatRun "hmatrix" 2 rmmulth
-    , formatRun "matrix" 2 rmmultm
-    , formatRun "numhask []" 2 rmmult
-    , formatRun "numhask Boxed" 2 rmmultv
-    , formatRun "DLA" 2 rmmultdla
+    , formatRun "numhask []" 2 (fmap fst xList)
+    , formatRun "numhask Vector" 2 (fmap fst xVec)
+    , formatRun "HMatrix" 2 (fmap fst xH)
+    , formatRun "DLA (row by column)" 2 (fmap fst xDLA)
     ]
+
+
 
   -- numhask operations
   (rrow, _) <- ticks n (NumHask.Array.row (Proxy :: Proxy 4)) ab

@@ -8,10 +8,10 @@ array performance
 
 The first runs compares creation of a 10x10 matrix and matrix multiplication for:
 
-- [hmatrix](http://hackage.haskell.org/package/hmatrix)
-- [matrix](https://hackage.haskell.org/package/matrix)
-- A NumHask.Array instance with list as a container
-- A NumHask.Array instance with a boxed vector instance
+-   A NumHask.Array instance with list as a container
+-   A NumHask.Array instance with a boxed vector instance
+-   [hmatrix](http://hackage.haskell.org/package/hmatrix)
+-   [dense-linear-algebra](http://hackage.haskell.org/package/dense-linear-algebra)
 
 ```include
 other/array.md
@@ -38,3 +38,20 @@ reference
 
 - [perf](https://hackage.haskell.org/package/perf)
 - [numhask](https://hackage.haskell.org/package/numhask)
+
+
+testing
+---
+
+```
+stack clean
+stack build --executable-profiling --library-profiling --ghc-options "-fprof-auto -rtsopts"
+```
+
+http://hackage.haskell.org/package/inspection-testing-0.4.1.2/docs/Test-Inspection.html
+
+```
+bench/benchListSimplest +RTS -hc -i0.00001 -xt
+bench/benchListSimplest +RTS -p
+```
+

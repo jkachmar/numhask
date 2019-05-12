@@ -1,14 +1,14 @@
 resolver: nightly-2019-03-15
 
 packages:
-  - numhask
-  - numhask-prelude
-  - numhask-array
-  - numhask-hedgehog
+  - ../numhask
+  - ../numhask-prelude
+  - ../numhask-array
+  - ../numhask-hedgehog
   # issues with hmatrix
-  - numhask-bench
-  - numhask-space
-  - ../perf/citerion
+  - ./
+  - ../numhask-space
+  - ../../perf/perf-criterion
 
 extra-deps:
   - dimensions-1.0.1.1
