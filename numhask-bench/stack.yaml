@@ -1,4 +1,4 @@
-resolver: nightly-2019-03-15
+resolver: lts-13.20
 
 packages:
   - ../numhask
@@ -6,9 +6,8 @@ packages:
   - ../numhask-array
   - ../numhask-hedgehog
   # issues with hmatrix
-  - ./
+  - .
   - ../numhask-space
-  - ../../perf/perf-criterion
 
 extra-deps:
   - dimensions-1.0.1.1

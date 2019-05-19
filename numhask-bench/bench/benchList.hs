@@ -46,6 +46,10 @@ main = do
   x <- sequence $ replicate 1000 (oneRunVector g)
   print $ sum $ sum $ fmap snd x
   putStrLn $ formatRun "numhask Vector" 2 (fmap fst x)
+  -- tickNoinline (\x -> sequence $ replicate x (oneRunList g)) 1000
+  print $ sum $ sum $ fmap snd x
+  putStrLn $ formatRun "numhask []" 2 (fmap fst x)
+  print $ percentile 0.1 (fmap fst x)
    
 
 
