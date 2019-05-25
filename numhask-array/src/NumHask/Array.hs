@@ -54,8 +54,8 @@ newtype instance
     Array { _getContainer :: c t}
     deriving (Functor, Foldable)
 
-instance NFData (Array c ds t) where
-  rnf a = seq a ()
+instance NFData (Array c (ds :: [Nat]) t) where
+  rnf (Array c) = seq c ()
 
 {-
 -- | instance of array where some of the dimensions are known at compile time
